@@ -1,10 +1,12 @@
 package com.app.cache;
 
 import java.util.Enumeration;
+import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 public class CustomCache implements Cache {
 
@@ -13,21 +15,22 @@ public class CustomCache implements Cache {
 	private int limit = 100;
 
 //this is our private class for cache object
-	private static class CacheObject {
+	private static class CacheObject implements Comparable<CacheObject> {
 
-		public CacheObject(Object value, long expiryTime) {
+		public CacheObject(Object value, Long expiryTime) {
 			this.value = value;
 			this.expiryTime = expiryTime;
 		}
 
 		private Object value;
-		private long expiryTime;
+		private Long expiryTime;
 
 		public CacheObject getInstance() {
 			return this;
 		}
 
 		public Object getValue() {
+			this.expiryTime = System.currentTimeMillis() + 6000;
 			return value;
 		}
 
@@ -35,16 +38,21 @@ public class CustomCache implements Cache {
 			this.value = value;
 		}
 
-		public long getExpiryTime() {
+		public Long getExpiryTime() {
 			return expiryTime;
 		}
 
-		public void setExpiryTime(long expiryTime) {
+		public void setExpiryTime(Long expiryTime) {
 			this.expiryTime = expiryTime;
 		}
 
 		public boolean isExpired() {
 			return System.currentTimeMillis() > expiryTime;
+		}
+
+		@Override
+		public int compareTo(CacheObject o) {
+			return o.getExpiryTime().compareTo(this.getExpiryTime());
 		}
 	}
 
@@ -57,8 +65,20 @@ public class CustomCache implements Cache {
 			while (!Thread.currentThread().isInterrupted()) {
 				try {
 					Thread.sleep(eraseTime * 1000);
+					//remove if time is up
 					cache.entrySet().removeIf(entry -> Optional.ofNullable(entry.getValue())
 							.map(CacheObject::getInstance).map(CacheObject::isExpired).orElse(false));
+			
+					//remove if size limit
+					if(cache.size()>limit) {
+						removeFirstItemInCache();
+					}
+			
+					//remove the least used
+					List<Entry<String, CacheObject>> keys = cache.entrySet().stream()
+					   .sorted(Map.Entry.comparingByValue()).collect(Collectors.toList());
+					cache.remove(keys.get(0).getKey());
+					
 				} catch (InterruptedException e) {
 					Thread.currentThread().interrupt();
 				}
@@ -68,6 +88,16 @@ public class CustomCache implements Cache {
 		cleanerThread.start();
 	}
 
+	private void removeFirstItemInCache() {
+		Enumeration<String> entry = cache.keys();
+		String nextKey = entry.nextElement();
+		cache.remove(nextKey);
+	}
+
+	public Enumeration<String> getKeys() {
+		return cache.keys();
+	}
+	
 	@Override
 	public void addItem(String key, Object v) {
 
@@ -83,11 +113,7 @@ public class CustomCache implements Cache {
 				if (cache.contains(key)) {
 					cache.remove(key);
 				} else {
-					//so the cache is full and we dont have the inserted key. we will simply evicted the first object in the cache array.
-					//why the first object? the map is unorganized but it we know that the first object in the cache map is the oldest simply because it was in there first...so logically
-					// we remove that one and add our new one to the map. we dont use a replace ever to keep this rule true.
-					Enumeration<String> entry = cache.keys();
-					cache.remove(entry.nextElement());
+					removeFirstItemInCache();
 				}
 				long expiryTime = System.currentTimeMillis() + 6000;
 				cache.put(key, new CacheObject(v, expiryTime));
