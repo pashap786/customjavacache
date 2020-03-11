@@ -58,27 +58,28 @@ public class CustomCache implements Cache {
 
 	public CustomCache() {
 		/*
-		 * we have a thread running on initialization
-		 * we sleep every 10 seconds then we check to remove instances of our expired cache objects
+		 * we have a thread running on initialization we sleep every 10 seconds then we
+		 * check to remove instances of our expired cache objects
 		 */
 		Thread cleanerThread = new Thread(() -> {
 			while (!Thread.currentThread().isInterrupted()) {
 				try {
 					Thread.sleep(eraseTime * 1000);
-					//remove if time is up
+					// remove if time is up
 					cache.entrySet().removeIf(entry -> Optional.ofNullable(entry.getValue())
 							.map(CacheObject::getInstance).map(CacheObject::isExpired).orElse(false));
-			
-					//remove if size limit
-					if(cache.size()>limit) {
+
+					// remove if size limit
+					if (cache.size() > limit) {
 						removeFirstItemInCache();
 					}
-			
-					//remove the least used
-					List<Entry<String, CacheObject>> keys = cache.entrySet().stream()
-					   .sorted(Map.Entry.comparingByValue()).collect(Collectors.toList());
-					cache.remove(keys.get(0).getKey());
-					
+
+					// remove the least used
+					if (!cache.isEmpty()) {
+						List<Entry<String, CacheObject>> keys = cache.entrySet().stream()
+								.sorted(Map.Entry.comparingByValue()).collect(Collectors.toList());
+						cache.remove(keys.get(0).getKey());
+					}
 				} catch (InterruptedException e) {
 					Thread.currentThread().interrupt();
 				}
@@ -89,15 +90,15 @@ public class CustomCache implements Cache {
 	}
 
 	private void removeFirstItemInCache() {
-		Enumeration<String> entry = cache.keys();
-		String nextKey = entry.nextElement();
-		cache.remove(nextKey);
+		List<Entry<String, CacheObject>> keys = cache.entrySet().stream().sorted(Map.Entry.comparingByValue())
+				.collect(Collectors.toList());
+		cache.remove(keys.get(0).getKey());
 	}
 
 	public Enumeration<String> getKeys() {
 		return cache.keys();
 	}
-	
+
 	@Override
 	public void addItem(String key, Object v) {
 
@@ -107,9 +108,10 @@ public class CustomCache implements Cache {
 		if (v == null) {
 			cache.remove(key);
 		} else {
-			//so we set the size to 100
+			// so we set the size to 100
 			if (cache.size() > 100) {
-				//if the map contains the key and the size of the map is greater than 100 we will remove the key and add the new value
+				// if the map contains the key and the size of the map is greater than 100 we
+				// will remove the key and add the new value
 				if (cache.contains(key)) {
 					cache.remove(key);
 				} else {
@@ -126,27 +128,29 @@ public class CustomCache implements Cache {
 
 	@Override
 	public void removeItem(String key) {
-		//removes a key
+		// removes a key
 		cache.remove(key);
 	}
 
 	@Override
 	public Object get(String key) {
-		//using streams we will use optional class to make sure no nulls/ then we get an instance of our cache object
-		//we filter any object that is expired. we map the value if something was not expired and return it. if we have nothing we return null;
+		// using streams we will use optional class to make sure no nulls/ then we get
+		// an instance of our cache object
+		// we filter any object that is expired. we map the value if something was not
+		// expired and return it. if we have nothing we return null;
 		return Optional.ofNullable(cache.get(key)).map(CacheObject::getInstance)
 				.filter(cacheObject -> !cacheObject.isExpired()).map(CacheObject::getValue).orElse(null);
 	}
 
 	@Override
 	public void empty() {
-		//clear the whole map
+		// clear the whole map
 		cache.clear();
 	}
 
 	@Override
 	public long size() {
-		//return the size of the map.
+		// return the size of the map.
 		return cache.size();
 	}
 
